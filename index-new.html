@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asystent Projektowania Wnętrz AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+        .ai-option-button, .rating-button {
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        }
+        .ai-option-button:hover:not(:disabled), .rating-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        }
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
+        }
+        .furniture-item.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+        .upload-drop-zone {
+            min-height: 150px;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 2px dashed #d1d5db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        .upload-drop-zone:hover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .rating-button.selected {
+            background-color: #10b981; 
+            color: white;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.5);
+        }
+        /* Custom styles for Section 0 (Alternatywny Upload) */
+        .dummy-drop-zone {
+            min-height: 100px;
+            background-color: #fff7ed; 
+            border-radius: 0.5rem;
+            border: 2px dashed #f97316; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        .dummy-drop-zone:hover {
+            background-color: #ffedd5; 
+        }
+        .upload-status {
+            text-align: center;
+            font-weight: 600; /* font-semibold */
+            font-size: 0.875rem; /* text-sm */
+        }
+        .hidden-after-upload {
+             opacity: 1;
+             transition: opacity 0.5s ease-in-out, height 0.5s ease-in-out;
+        }
+        .hidden-after-upload.hidden {
+            opacity: 0;
+            height: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden;
+        }
+        /* Nowy styl dla karty rekomendacji (Sekcja 6) */
+        .recommendation-card {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #fbcfe8; /* pink-200 */
+            background-color: #fdf2f8; /* pink-50 */
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        }
+        /* Styl dla kontenera wygenerowanego obrazu */
+        .generation-output-container {
+            position: relative;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <main class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-10 flex flex-col gap-8">
+        <header>
+            <h1 class="text-3xl font-extrabold text-gray-800">Asystent Wnętrz AI (ATRAPA)</h1>
+            <p class="text-gray-500 mt-2">Wgrywaj zdjęcia, rozmieszczaj meble, generuj wizualizacje i oceniaj efekty.</p>
+        </header>
+
+        <!-- Sekcja 0: Alternatywne Wczytywanie Plików (DO ATRAPY) -->
+        <section id="dummy-input-section" class="hidden-after-upload bg-orange-100 p-6 rounded-2xl border-2 border-orange-500">
+            <h2 class="text-xl font-bold text-orange-800 mb-4">0. Tryb Atrapy - Uzupełnij Dane dla Symulacji</h2>
+            <p class="text-sm text-orange-700 mb-4">Po wgraniu plików w obu sekcjach, ta sekcja zniknie, a dane posłużą do symulacji Generowania (0.a) i Rekomendacji (0.b).</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 0.a: Zdjęcie Gotowego Pokoju (Wynik Generacji) -->
+                <div class="bg-orange-50 p-3 rounded-xl border border-orange-300">
+                    <label class="block text-sm font-medium text-orange-700 mb-2">0.a Zdjęcie Gotowego Pokoju (Wynik AI)</label>
+                    <div id="dummy-room-drop-zone" class="dummy-drop-zone relative text-center text-orange-600">
+                        <input id="dummy-room-file-input" type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer">
+                        <p id="dummy-room-status" class="upload-status">Wybierz plik ze zdjęciem (Symulowany Wynik Generacji)</p>
+                    </div>
+                </div>
+                <!-- 0.b: Zdjęcia Mebli (Rekomendacje) -->
+                <div class="bg-orange-50 p-3 rounded-xl border border-orange-300">
+                    <label class="block text-sm font-medium text-orange-700 mb-2">0.b Zdjęcia Mebli (Rekomendacje)</label>
+                    <div id="dummy-furniture-drop-zone" class="dummy-drop-zone relative text-center text-orange-600">
+                        <input id="dummy-furniture-file-input" type="file" accept="image/*" multiple class="absolute inset-0 opacity-0 cursor-pointer">
+                        <p id="dummy-furniture-status" class="upload-status">Wybierz pliki mebli (Symulowane Rekomendacje)</p>
+                    </div>
+                </div>
+            </div>
+            <p id="dummy-ready-message" class="text-sm text-orange-800 mt-4 text-center font-bold hidden">
+                ✅ Tryb Atrapy aktywowany! Sekcja 0.a posłuży za wynik generacji.
+            </p>
+        </section>
+
+
+        <!-- Sekcja Główna: Wprowadzanie i Generowanie -->
+        <section class="flex flex-col space-y-6">
+
+            <!-- UKŁAD: Sekcje 1 i 2 obok siebie -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Sekcja 1: Zdjęcie pokoju (Wprowadzane przez Użytkownika) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">1. Zdjęcie pokoju (Wprowadzane przez Użytkownika)</label>
+                    <input id="room-image-input" type="file" accept="image/*" class="hidden">
+                    <div id="room-drop-zone" class="upload-drop-zone relative">
+                        <div id="room-placeholder" class="text-center text-gray-500">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <p class="mt-2 text-sm">Kliknij lub przeciągnij plik pokoju</p>
+                        </div>
+                        <div id="room-success-indicator" class="hidden text-center text-green-600">
+                            <svg class="mx-auto h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="mt-2 text-lg font-semibold">Zdjęcie pokoju wczytane!</p>
+                        </div>
+                        <img id="room-preview" class="hidden" alt="Podgląd zdjęcia pokoju">
+                    </div>
+                </div>
+
+                <!-- Sekcja 2: Dodaj meble (Wprowadzane przez Użytkownika) -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">2. Dodaj meble (Wprowadzane przez Użytkownika)</label>
+                    <input id="furniture-image-input" type="file" accept="image/*" multiple class="hidden">
+                    <div id="furniture-drop-zone" class="upload-drop-zone relative">
+                        <div id="furniture-list" class="grid grid-cols-3 gap-2 w-full"></div>
+                        <div id="furniture-placeholder" class="absolute inset-0 bg-gray-50/70 flex items-center justify-center rounded-lg pointer-events-none transition-opacity duration-300">
+                            <div class="text-center text-gray-500">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                                <p class="mt-2 text-sm">Kliknij lub przeciągnij pliki mebli</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sekcja 3: Rozmieść wybrane meble na zdjęciu -->
+            <div>
+                <p class="text-sm font-medium text-gray-700 mb-2">3. Rozmieść wybrane meble na zdjęciu z Sekcji 1</p>
+                <canvas id="image-canvas" class="cursor-crosshair w-full rounded-lg border-2 border-dashed border-gray-300"></canvas>
+                <div class="flex justify-between items-center mt-2">
+                    <p class="text-xs text-gray-500">Kliknij na zdjęcie, aby umieścić wybrany mebel. Aktualnie wybrany mebel: <span id="selected-furniture-name" class="font-semibold text-blue-600">Brak</span></p>
+                    <button id="reset-points-button" class="text-xs text-red-600 hover:text-red-700 font-semibold py-1 px-2 rounded-md transition-colors" disabled>
+                        Wyczyść pozycje
+                    </button>
+                </div>
+            </div>
+
+            <!-- Przycisk Generowania (Sekcja 4 - Uproszczona) -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <button id="generate-button" data-action="generate" class="ai-option-button w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-lg">
+                    <span class="button-text">4. Generuj Wizualizację</span>
+                    <div class="spinner hidden ml-2"></div>
+                </button>
+            </div>
+            
+            <!-- Wyjście dla Generowania -->
+            <div id="ai-generation-output" class="mt-2 generation-output-container"></div>
+
+            <!-- Sekcja 5: Ocena Generacji -->
+            <div id="rating-section" class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 hidden">
+                <h3 class="font-bold text-lg text-gray-700 mb-3">5. Ocena Wygenerowanego Obrazu</h3>
+                <p class="text-sm text-gray-600 mb-4">Czy wygenerowany obraz spełnia Twoje oczekiwania?</p>
+                <div class="flex space-x-4">
+                    <button id="rate-positive" data-rating="positive" class="rating-button flex-1 bg-white text-green-600 border border-green-500 font-bold py-2 px-4 rounded-lg hover:bg-green-100 transition-all">
+                        <span class="text-2xl mr-2">👍</span> Tak, jest świetny!
+                    </button>
+                    <button id="rate-negative" data-rating="negative" class="rating-button flex-1 bg-white text-red-600 border border-red-500 font-bold py-2 px-4 rounded-lg hover:bg-red-100 transition-all">
+                        <span class="text-2xl mr-2">👎</span> Nie, spróbuję inaczej.
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sekcja 6: Propozycja Innych Produktów (po negatywnej ocenie) -->
+            <div id="recommendation-section" class="bg-pink-50 p-4 rounded-lg border border-pink-200 hidden">
+                <h3 class="font-bold text-lg text-gray-700 mb-3">6. Inne Produkty (ATRAPA Rekomendacji)</h3>
+                <p class="text-sm text-gray-600 mb-4">Wygląda na to, że potrzebujesz innej inspiracji. Oto symulowane rekomendacje dopasowane do Twojego pokoju, wczytane z **Sekcji 0.b**:</p>
+                <div class="flex flex-col gap-4" id="recommendations-list">
+                    <!-- Dynamicznie wstawiane atrapy rekomendacji -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Referencje do elementów DOM ---
+    const dummyInputSection = document.getElementById('dummy-input-section'); // Sekcja 0
+    const dummyRoomFileInput = document.getElementById('dummy-room-file-input');
+    const dummyFurnitureFileInput = document.getElementById('dummy-furniture-file-input');
+    const dummyRoomStatus = document.getElementById('dummy-room-status');
+    const dummyFurnitureStatus = document.getElementById('dummy-furniture-status');
+    const dummyReadyMessage = document.getElementById('dummy-ready-message');
+    
+    // Sekcja 1 & 2 (Główny Upload)
+    const roomImageInput = document.getElementById('room-image-input');
+    const roomDropZone = document.getElementById('room-drop-zone');
+    const roomPlaceholder = document.getElementById('room-placeholder');
+    const roomSuccessIndicator = document.getElementById('room-success-indicator');
+    
+    const furnitureImageInput = document.getElementById('furniture-image-input');
+    const furnitureDropZone = document.getElementById('furniture-drop-zone');
+    const furnitureListDiv = document.getElementById('furniture-list');
+    const furniturePlaceholder = document.getElementById('furniture-placeholder');
+
+    const canvas = document.getElementById('image-canvas');
+    const ctx = canvas.getContext('2d');
+    const selectedFurnitureNameSpan = document.getElementById('selected-furniture-name');
+
+    const generateButton = document.getElementById('generate-button');
+    const resetPointsButton = document.getElementById('reset-points-button');
+
+    const generationOutput = document.getElementById('ai-generation-output');
+    
+    // Sekcje końcowe
+    const ratingSection = document.getElementById('rating-section');
+    const ratePositiveButton = document.getElementById('rate-positive');
+    const rateNegativeButton = document.getElementById('rate-negative');
+    const recommendationSection = document.getElementById('recommendation-section');
+    const recommendationsList = document.getElementById('recommendations-list');
+    
+    // --- Stan aplikacji ---
+    let base64RoomImage = null; // Główne zdjęcie pokoju (Sekcja 1)
+    let originalRoomImage = null; // Obiekt Image do rysowania na Canvasie (Sekcja 1)
+    let furnitureItems = []; // Lista obiektów mebli (Sekcja 2)
+    let selectedFurnitureId = null;
+    let isGenerated = false; // Nowy stan: czy generacja zakończyła się sukcesem
+
+    // Stan niezależny dla Sekcji 0 (Gotowy Projekt / Atrapa)
+    let generatedRoomDataUrl = null; // Sekcja 0.a - Gotowy obraz (wynik generacji)
+    let generatedFurnitureFiles = []; // Sekcja 0.b - Pliki mebli (rekomendacje)
+    let isDummyModeActive = false; // Czy wczytano oba pliki w Sekcji 0
+
+    // --- Atrapa danych do symulacji wyniku ---
+    let recommendedProducts = [];
+
+    const generateRecommendedProducts = (files) => {
+        recommendedProducts = files.map((file, index) => ({
+            id: `rec-${index}-${Date.now()}`,
+            name: `Sofa modułowa M${index + 1}`,
+            manufacturer: index % 2 === 0 ? 'Meble Wawa' : 'Design Home',
+            price: (2500 + index * 500).toFixed(2), 
+            currency: 'PLN',
+            imageUrl: URL.createObjectURL(file),
+            file: file
+        }));
+    };
+
+    // --- Funkcje pomocnicze ---
+    
+    /**
+     * Zmienia rozmiar obrazu (z pliku) i zwraca Base64/DataURL
+     */
+    const processImageSource = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxWidth = 896, maxHeight = 896;
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Utrzymywanie proporcji
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                    const base64 = dataUrl.split(',')[1];
+                    resolve({ base64, dataUrl, width, height });
+                };
+                img.onerror = (e) => reject(new Error(`Błąd wczytywania obrazu: plik.`));
+                img.src = event.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+    
+    /**
+     * Aktualizuje stan przycisków generowania.
+     */
+    const updateButtonStates = () => {
+        const placedItems = furnitureItems.filter(item => item.position);
+        
+        const isCanvasReady = base64RoomImage && furnitureItems.length > 0 && placedItems.length > 0;
+        
+        // DEZAKTYWOWANIE: Przycisk Generuj Wizualizację jest nieaktywny, jeśli jest już wygenerowane
+        generateButton.disabled = !isCanvasReady || !isDummyModeActive || isGenerated; 
+        
+        resetPointsButton.disabled = placedItems.length === 0;
+
+        // Widoczność sekcji oceny
+        if (isGenerated && generationOutput.innerHTML.trim() !== '') {
+            ratingSection.classList.remove('hidden');
+        } else {
+            ratingSection.classList.add('hidden');
+        }
+    };
+    
+    /**
+     * Zaznacza podany element mebla i aktualizuje stan aplikacji.
+     */
+    const selectFurnitureItem = (itemId, itemEl = null) => {
+        selectedFurnitureId = itemId;
+        
+        document.querySelectorAll('.furniture-item').forEach(el => el.classList.remove('selected'));
+        
+        const selectedItem = furnitureItems.find(item => item.id === itemId);
+        
+        if (selectedItem) {
+            const targetEl = itemEl || document.querySelector(`.furniture-item[data-id="${itemId}"]`);
+            if (targetEl) targetEl.classList.add('selected');
+            
+            selectedFurnitureNameSpan.textContent = `Mebel ${furnitureItems.indexOf(selectedItem) + 1} (${selectedItem.name})`;
+        } else {
+            selectedFurnitureNameSpan.textContent = "Brak";
+        }
+    };
+    
+    // --- Zarządzanie Stanem Sekcji 0 (Gotowy Projekt) ---
+
+    const checkDummyMode = () => {
+        const wasDummyModeActive = isDummyModeActive;
+        isDummyModeActive = generatedRoomDataUrl !== null && generatedFurnitureFiles.length > 0;
+        
+        dummyReadyMessage.classList.toggle('hidden', !isDummyModeActive);
+        
+        // Animacja ukrywania sekcji
+        if (isDummyModeActive && !wasDummyModeActive) {
+            dummyInputSection.classList.add('hidden');
+            console.log("Tryb Atrapy (Sekcja 0) aktywowany i ukryty.");
+        } else if (!isDummyModeActive && wasDummyModeActive) {
+             dummyInputSection.classList.remove('hidden');
+        }
+        
+        updateButtonStates();
+    };
+
+    const updateDummyStatus = (isRoom) => {
+        if (isRoom) {
+            dummyRoomStatus.textContent = generatedRoomDataUrl ? "Wczytano gotowy obraz!" : "Wybierz plik ze zdjęciem (Symulowany Wynik Generacji)";
+            dummyRoomStatus.classList.toggle('text-green-700', !!generatedRoomDataUrl);
+        } else {
+            dummyFurnitureStatus.textContent = generatedFurnitureFiles.length > 0 ? `Wczytano ${generatedFurnitureFiles.length} plików mebli (rekomendacje)` : "Wybierz pliki mebli (Symulowane Rekomendacje)";
+            dummyFurnitureStatus.classList.toggle('text-green-700', generatedFurnitureFiles.length > 0);
+        }
+        checkDummyMode();
+    };
+
+    // --- Obsługa Wgrania Obrazu Pokoju (Sekcja 1 - Główna) ---
+    /**
+     * Główna funkcja do ładowania obrazu pokoju, aktualizuje Sekcję 1 i stan główny.
+     */
+    const handleRoomSource = async (file) => {
+        if (!file) return;
+
+        // Resetowanie wizualne
+        document.querySelectorAll('#room-drop-zone > .text-red-500').forEach(el => el.remove());
+        roomPlaceholder.classList.add('hidden');
+        roomSuccessIndicator.classList.add('hidden');
+
+        // Reset stanu generacji przy zmianie obrazu
+        isGenerated = false; 
+        generationOutput.innerHTML = '';
+
+        try {
+            const result = await processImageSource(file);
+            base64RoomImage = result.base64;
+            
+            roomSuccessIndicator.classList.remove('hidden');
+            
+            originalRoomImage = new Image();
+            originalRoomImage.onload = () => {
+                // Ustawienie rozmiaru canvasa na rozmiar wczytanego obrazu (przeskalowanego)
+                canvas.width = originalRoomImage.width;
+                canvas.height = originalRoomImage.height;
+                redrawCanvas();
+            };
+            originalRoomImage.src = result.dataUrl;
+            
+            updateButtonStates();
+        } catch (error) {
+            console.error("Błąd podczas przetwarzania obrazu pokoju:", error);
+            const errorContainer = document.getElementById('room-drop-zone');
+            const errorMessage = document.createElement('p');
+            errorMessage.className = 'text-red-500 text-sm mt-2 font-semibold';
+            errorMessage.textContent = `Błąd: Nie udało się wczytać zdjęcia. ${error.message}`;
+            errorContainer.appendChild(errorMessage);
+            setTimeout(() => errorMessage.remove(), 7000); 
+
+            roomPlaceholder.classList.remove('hidden');
+            base64RoomImage = null;
+            originalRoomImage = null;
+            updateButtonStates();
+        }
+    }
+    
+    // --- Obsługa Wgrania Mebli (Sekcja 2 - Główna) ---
+    /**
+     * Dodaje pojedynczy element mebla do listy.
+     */
+    const addFurnitureItem = async (file, fileName = 'Mebel') => {
+        if (!file) return;
+        
+        const itemId = Date.now() + Math.random();
+        const currentIndex = furnitureItems.length;
+
+        const furnitureItem = {
+            id: itemId,
+            base64: null,
+            position: null,
+            thumbnail: URL.createObjectURL(file),
+            name: fileName.replace(/\.[^/.]+$/, "") 
+        };
+        furnitureItems.push(furnitureItem);
+
+        const itemEl = document.createElement('div');
+        itemEl.className = 'furniture-item relative p-1 border-2 border-transparent rounded-lg cursor-pointer flex flex-col items-center text-center hover:bg-gray-100 transition-colors';
+        itemEl.dataset.id = itemId;
+        itemEl.innerHTML = `
+            <img src="${furnitureItem.thumbnail}" alt="${furnitureItem.name}" class="w-16 h-16 object-contain rounded-md">
+            <p class="text-xs mt-0.5 truncate w-full px-1">${furnitureItem.name}</p>
+            <span class="absolute top-0 left-0 bg-blue-500 text-white text-xs font-bold px-1 rounded-br-lg">#${currentIndex + 1}</span>
+        `;
+        
+        itemEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectFurnitureItem(itemId, itemEl);
+        });
+        furnitureListDiv.appendChild(itemEl);
+
+        try {
+            const result = await processImageSource(file);
+            furnitureItem.base64 = result.base64;
+        } catch (error) {
+            console.error("Błąd podczas przetwarzania obrazu mebla:", error);
+            itemEl.style.opacity = '0.5';
+            itemEl.title = `Błąd przetwarzania: ${error.message}`;
+            furnitureItem.base64 = null; 
+        }
+        
+        return furnitureItem;
+    }
+    
+    /**
+     * Obsługuje listę wgranych plików mebli (Sekcja 2).
+     */
+    const handleFiles = async (files) => {
+        const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+        
+        if (newFiles.length === 0) return;
+
+        // Resetujemy listę i punkty, gdy wczytujemy nowe pliki
+        furnitureItems = [];
+        furnitureListDiv.innerHTML = '';
+        selectFurnitureItem(null);
+        redrawCanvas(); // Czyścimy canvas, bo punkty są już nieaktualne
+        
+        // Reset stanu generacji przy zmianie mebli
+        isGenerated = false; 
+        generationOutput.innerHTML = '';
+
+        furniturePlaceholder.style.opacity = '0';
+        furniturePlaceholder.style.pointerEvents = 'none';
+
+        for (const file of newFiles) {
+            await addFurnitureItem(file, file.name);
+        }
+        
+        if (furnitureItems.length > 0) {
+            selectFurnitureItem(furnitureItems[0].id);
+        }
+
+        updateButtonStates();
+    };
+
+    // --- Logika ATRAPY AI (Tylko Generacja) ---
+    const apiFunctions = {
+        generate: async () => {
+            await new Promise(resolve => setTimeout(resolve, 2000)); 
+            ratePositiveButton.classList.remove('selected');
+            rateNegativeButton.classList.remove('selected');
+            recommendationSection.classList.add('hidden');
+
+            if (!isDummyModeActive || !generatedRoomDataUrl) {
+                 throw new Error("Błąd symulacji: Brak gotowego obrazu w Sekcji 0.a.");
+            }
+            
+            // W trybie atrapy zwracamy obraz wgrany w Sekcji 0.a
+            return { image: generatedRoomDataUrl }; 
+        },
+    };
+
+    /**
+     * Rysuje wynik generacji (w trybie atrapy) i wstawia przycisk do ponownej generacji.
+     */
+    const renderGenerationResult = (imageUrl) => {
+        generationOutput.innerHTML = `
+            <div class="relative">
+                <img src="${imageUrl}" alt="Wygenerowana aranżacja (ATRAPA - Gotowiec z 0.a)" class="rounded-lg shadow-md w-full">
+                <!-- Przycisk Ponownej Generacji -->
+                <button id="regenerate-button" class="absolute bottom-3 right-3 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-gray-100 transition-colors border border-gray-300 z-10" title="Generuj ponownie">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m15.356 2H20m-4.5 3h-3a2 2 0 00-2 2v3m-5-4v5h.582m-1.554-2a8.001 8.001 0 0113.82-5.903"></path>
+                    </svg>
+                </button>
+            </div>
+        `;
+        
+        // Dodanie listenera do nowego przycisku
+        document.getElementById('regenerate-button').addEventListener('click', () => {
+             isGenerated = false; // Odblokowanie głównego przycisku
+             handleAiAction(generateButton); // Wywołanie ponownej generacji
+        });
+    };
+
+    /**
+     * Obsługa przycisków generowania.
+     */
+    const handleAiAction = async (button) => {
+        const action = button.dataset.action;
+        
+        // Wymagania: Muszą być dane wejściowe Użytkownika (Sekcja 1, 2, 3)
+        const placedItems = furnitureItems.filter(item => item.position);
+        const isCanvasReady = base64RoomImage && furnitureItems.length > 0 && placedItems.length > 0;
+        
+        if (!isCanvasReady) {
+            const message = "Wczytaj zdjęcie pokoju (1), meble (2) i rozmieść punkty (3), aby symulować generację.";
+            generationOutput.innerHTML = `<p class="text-red-600 font-semibold bg-red-100 p-3 rounded-lg">${message}</p>`;
+            setTimeout(() => generationOutput.innerHTML = '', 4000);
+            return;
+        }
+
+        // Dodatkowe sprawdzenie dla generowania
+        if (action === 'generate' && !isDummyModeActive) {
+            generationOutput.innerHTML = `<p class="text-red-600 font-semibold bg-red-100 p-3 rounded-lg">Wymagane: Uzupełnij Tryb Atrapy (Sekcja 0.a i 0.b), aby dostarczyć symulowany wynik generacji.</p>`;
+            setTimeout(() => generationOutput.innerHTML = '', 4000);
+            return;
+        }
+
+        const spinner = button.querySelector('.spinner');
+        const buttonText = button.querySelector('.button-text');
+        spinner.classList.remove('hidden');
+        buttonText.classList.add('hidden');
+        
+        button.disabled = true;
+        
+        generationOutput.innerHTML = '';
+        ratingSection.classList.add('hidden');
+        recommendationSection.classList.add('hidden');
+        isGenerated = false;
+
+        try {
+            const result = await apiFunctions[action]();
+            // action może być tylko 'generate'
+            if (action === 'generate') {
+                renderGenerationResult(result.image); // Użycie nowej funkcji renderującej z przyciskiem
+                isGenerated = true; // Ustawienie stanu na wygenerowane
+            }
+        } catch (error) {
+            console.error(`Błąd podczas akcji '${action}':`, error);
+            const errorHtml = `<p class="text-red-600 font-semibold">Wystąpił błąd: ${error.message}</p>`;
+            generationOutput.innerHTML = errorHtml;
+        } finally {
+            spinner.classList.add('hidden');
+            buttonText.classList.remove('hidden');
+            updateButtonStates(); 
+        }
+    };
+
+
+    // --- Funkcje sekcji 5 i 6 (Ocena Generacji i Rekomendacje) ---
+    
+    // Funkcja do symulacji dodawania mebla z rekomendacji do sekcji 2
+    const visualizeRecommendation = async (product) => {
+        // 1. Ukrywamy sekcje oceny i rekomendacji
+        ratingSection.classList.add('hidden');
+        recommendationSection.classList.add('hidden');
+        
+        // 2. Wyczyść stare meble z sekcji 2 i canvasa
+        furnitureItems = [];
+        furnitureListDiv.innerHTML = '';
+        selectFurnitureItem(null);
+        redrawCanvas();
+        
+        // Reset stanu generacji, ponieważ zmieniamy dane wejściowe
+        isGenerated = false; 
+        generationOutput.innerHTML = '';
+
+        // 3. Dodaj nowy mebel (produkt) do Sekcji 2
+        // Używamy oryginalnego pliku z ATRAPY
+        await addFurnitureItem(product.file, product.name);
+        
+        // 4. Ustaw nowo dodany mebel jako wybrany
+        if (furnitureItems.length > 0) {
+            selectFurnitureItem(furnitureItems[0].id);
+        }
+        
+        // 5. Wyświetl komunikat dla użytkownika
+        const messageEl = document.createElement('p');
+        messageEl.className = 'mt-3 text-blue-700 font-semibold bg-blue-100 p-3 rounded-lg text-center';
+        messageEl.textContent = `✅ Mebel "${product.name}" dodany do Sekcji 2. Rozmieść go na zdjęciu (Sekcja 3), aby wygenerować nową wizualizację!`;
+        recommendationSection.insertAdjacentElement('afterend', messageEl);
+        setTimeout(() => messageEl.remove(), 7000);
+        
+        // 6. Aktualizuj stan przycisków
+        updateButtonStates();
+    };
+
+    const renderRecommendations = () => {
+        recommendationsList.innerHTML = '';
+        if (recommendedProducts.length === 0) {
+            recommendationsList.innerHTML = `<p class="text-center text-gray-500">Brak wczytanych mebli do rekomendacji w Sekcji 0.b.</p>`;
+            return;
+        }
+        
+        recommendedProducts.forEach((product) => {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'recommendation-card flex flex-col md:flex-row gap-4';
+            cardEl.innerHTML = `
+                <!-- Obraz -->
+                <div class="flex-shrink-0 w-full md:w-32 h-32 md:h-auto overflow-hidden rounded-lg bg-white p-2 border border-gray-100">
+                    <img src="${product.imageUrl}" alt="${product.name}" class="w-full h-full object-contain">
+                </div>
+                
+                <!-- Szczegóły Produktu -->
+                <div class="flex-grow flex flex-col justify-between">
+                    <div>
+                        <h4 class="text-lg font-bold text-gray-800">${product.name}</h4>
+                        <p class="text-sm text-gray-500">Producent: ${product.manufacturer}</p>
+                        <p class="text-xl font-extrabold text-pink-700 mt-2">${product.price} ${product.currency}</p>
+                    </div>
+                    
+                    <!-- Przyciski Akcji (Zamieniona kolejność) -->
+                    <div class="flex space-x-3 mt-4 md:mt-0">
+                        <!-- PRZYCISK KUP TERAZ (SECONDARY) -->
+                        <button class="flex-1 bg-white text-pink-600 border border-pink-600 text-sm font-semibold py-2 rounded-lg hover:bg-pink-100 transition-colors"
+                            onclick="window.open('https://pl.wikipedia.org/wiki/Sofa', '_blank')">
+                            Kup Teraz
+                        </button>
+                        <!-- PRZYCISK WIZUALIZUJ (PRIMARY) -->
+                        <button data-product-id="${product.id}" class="visualize-button flex-1 bg-pink-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-pink-700 transition-colors">
+                            Wizualizuj
+                        </button>
+                    </div>
+                </div>
+            `;
+            recommendationsList.appendChild(cardEl);
+        });
+
+        // Dodaj listener do przycisków Wizualizuj
+        recommendationsList.querySelectorAll('.visualize-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const productId = e.currentTarget.dataset.productId;
+                const product = recommendedProducts.find(p => p.id === productId);
+                if (product) {
+                    visualizeRecommendation(product);
+                } else {
+                    console.error("Nie znaleziono produktu do wizualizacji.");
+                }
+            });
+        });
+
+        recommendationSection.classList.remove('hidden');
+    };
+
+    // Obsługa kliknięć w przyciski oceny
+    ratePositiveButton.addEventListener('click', () => {
+        ratePositiveButton.classList.add('selected');
+        rateNegativeButton.classList.remove('selected');
+        recommendationSection.classList.add('hidden');
+        const message = document.createElement('p');
+        message.className = 'mt-3 text-green-700 font-semibold bg-green-100 p-2 rounded-lg';
+        message.textContent = '👍 Gratulacje! Cieszymy się, że projekt się podoba.';
+        ratingSection.insertAdjacentElement('afterend', message);
+        setTimeout(() => message.remove(), 4000);
+    });
+
+    rateNegativeButton.addEventListener('click', () => {
+        rateNegativeButton.classList.add('selected');
+        ratePositiveButton.classList.remove('selected');
+        renderRecommendations(); // Wyświetla meble z Sekcji 0.b
+        const message = document.createElement('p');
+        message.className = 'mt-3 text-red-700 font-semibold bg-red-100 p-2 rounded-lg';
+        message.textContent = '👎 Dziękujemy za opinię. Pokażemy Ci teraz alternatywne produkty, wczytane z Sekcji 0.b.';
+        ratingSection.insertAdjacentElement('afterend', message);
+        setTimeout(() => message.remove(), 4000);
+    });
+
+
+    // --- Rysowanie canvasa (Sekcja 3) ---
+    const redrawCanvas = () => {
+        if (!originalRoomImage) {
+             canvas.width = 0;
+             canvas.height = 0;
+             return;
+        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(originalRoomImage, 0, 0, canvas.width, canvas.height);
+        
+        furnitureItems.forEach((item, index) => {
+            if (item.position) {
+                const itemNumber = index + 1;
+                const { x, y } = item.position;
+                const isSelected = item.id === selectedFurnitureId;
+
+                ctx.beginPath();
+                ctx.arc(x, y, 15, 0, Math.PI * 2);
+                ctx.fillStyle = isSelected ? 'rgba(239, 68, 68, 0.9)' : 'rgba(59, 130, 246, 0.8)';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 16px Inter';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(itemNumber, x, y);
+            }
+        });
+    };
+
+
+    // --- Listenery ---
+    
+    // Listenery dla Sekcji 0 (Gotowy Projekt / Atrapa)
+    dummyRoomFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+             try {
+                // Przetwarzamy obraz, aby uzyskać DataURL
+                const result = await processImageSource(file);
+                generatedRoomDataUrl = result.dataUrl;
+            } catch (error) {
+                console.error("Błąd przetwarzania pliku 0.a:", error);
+                generatedRoomDataUrl = null;
+            }
+        }
+        updateDummyStatus(true);
+        e.target.value = null; 
+    });
+
+    dummyFurnitureFileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files).filter(file => file.type.startsWith('image/'));
+        generatedFurnitureFiles = files;
+        // Generujemy listę rekomendacji, gdy tylko pliki zostaną wczytane do Sekcji 0.b
+        generateRecommendedProducts(files); 
+        updateDummyStatus(false);
+        e.target.value = null;
+    });
+
+    // Listenery dla Strefy Pokoju (Sekcja 1 - Główna)
+    roomImageInput.addEventListener('change', (e) => handleRoomSource(e.target.files[0]));
+    roomDropZone.addEventListener('click', () => roomImageInput.click());
+    roomDropZone.addEventListener('dragover', (e) => { e.preventDefault(); roomDropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+    roomDropZone.addEventListener('dragleave', (e) => { e.preventDefault(); roomDropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+    roomDropZone.addEventListener('drop', (e) => { e.preventDefault(); roomDropZone.classList.remove('border-blue-500', 'bg-blue-50'); handleRoomSource(e.dataTransfer.files[0]); });
+    
+    // Listenery dla dodawania mebli (Sekcja 2 - Główna)
+    furnitureImageInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    furnitureDropZone.addEventListener('click', () => furnitureImageInput.click());
+    furnitureDropZone.addEventListener('dragover', (e) => { e.preventDefault(); furnitureDropZone.classList.add('border-blue-500', 'bg-blue-50'); });
+    furnitureDropZone.addEventListener('dragleave', (e) => { e.preventDefault(); furnitureDropZone.classList.remove('border-blue-500', 'bg-blue-50'); });
+    furnitureDropZone.addEventListener('drop', (e) => { e.preventDefault(); furnitureDropZone.classList.remove('border-blue-500', 'bg-blue-50'); handleFiles(e.dataTransfer.files); });
+
+    // Resetowanie punktów na canvasie
+    resetPointsButton.addEventListener('click', () => {
+        furnitureItems.forEach(item => item.position = null);
+        if (furnitureItems.length > 0) {
+            selectFurnitureItem(furnitureItems[0].id);
+        } else {
+             selectFurnitureItem(null);
+        }
+        
+        // Reset stanu generacji, ponieważ zmieniamy dane wejściowe
+        isGenerated = false;
+        generationOutput.innerHTML = '';
+
+        redrawCanvas();
+        updateButtonStates();
+    });
+
+    // Kliknięcie na canvas
+    canvas.addEventListener('click', (e) => {
+        if (!originalRoomImage) { console.warn("Najpierw wgraj zdjęcie pokoju!"); return; }
+        if (selectedFurnitureId === null) { console.warn("Najpierw wybierz mebel!"); return; }
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const position = { 
+            x: (e.clientX - rect.left) * scaleX, 
+            y: (e.clientY - rect.top) * scaleY 
+        };
+        
+        const itemToUpdate = furnitureItems.find(item => item.id === selectedFurnitureId);
+        if (itemToUpdate) { itemToUpdate.position = position; }
+        
+        // Reset stanu generacji, ponieważ zmieniamy dane wejściowe
+        isGenerated = false;
+        generationOutput.innerHTML = '';
+        
+        redrawCanvas();
+        updateButtonStates();
+    });
+
+    // Listener dla przycisku generacji
+    generateButton.addEventListener('click', () => handleAiAction(generateButton));
+
+    checkDummyMode(); // Inicjalne sprawdzenie stanu Sekcji 0
+});
+</script>
+</body>
+</html>
